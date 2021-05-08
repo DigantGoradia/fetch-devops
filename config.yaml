@@ -1,7 +1,7 @@
 # This YAML configuration specifies a server with two volumes and two users
 server:
   instance_type: t2.micro
-  ami_type: amzn2
+  ami_type: ami-077e31c4939f6a2f3
   architecture: x86_64
   root_device_type: ebs
   virtualization_type: hvm
