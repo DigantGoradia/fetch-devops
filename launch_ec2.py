@@ -1,4 +1,3 @@
-from os import read
 import yaml
 import boto3
 
@@ -11,17 +10,28 @@ with open(CONFIG_FILE_PATH, 'r') as config_file:
 try:
     config = yaml.safe_load(data)
 except Exception as e:
-    print('An Error occurred: ', e)
+    print(e)
 
 #Read necessary configurations for creating ec2
 instanceType = config['server']['instance_type']
 imageId = config['server']['ami_type']
 minCount = config['server']['min_count']
 maxCount = config['server']['max_count']
-vol1_device = config['server']['volumes'][0]['device']
-vol1_size = int(config['server']['volumes'][0]['size_gb'])
-vol2_device = config['server']['volumes'][1]['device']
-vol2_size = int(config['server']['volumes'][1]['size_gb'])
+virtualizationType = config['server']['virtualization_type']
+
+blockDevices = []
+for volume in config['server']['volumes']:
+    volumeConfig = {
+        'DeviceName': volume['device'],
+        'Ebs': {
+            'VolumeSize': volume['size_gb'],
+            #'VolumeType': volume['type']
+        }
+    }
+
+    blockDevices.append(volumeConfig)
+
+print(blockDevices)
 
 #Create ec2 instance
 try:
@@ -29,11 +39,12 @@ try:
 
     print('Creating EC2 instance...')
     ec2.run_instances(
+        BlockDeviceMappings = blockDevices,
         ImageId = imageId,
         InstanceType = instanceType,
         MinCount = minCount,
-        MaxCount = maxCount 
+        MaxCount = maxCount
     )
 except Exception as e:
-    print('An Error occurred: ', e)
+    print(e)
 
