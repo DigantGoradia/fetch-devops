@@ -20,6 +20,24 @@ minCount = config['server']['min_count']
 maxCount = config['server']['max_count']
 virtualizationType = config['server']['virtualization_type']
 
+#AWS resources initialization
+ec2_client = boto3.client('ec2')
+ec2_resource = boto3.resource('ec2')
+
+#Create key-pair for ec2-user
+try:
+    print('Creating key-pair for ec2-user...')
+    keyName ='fetch-rewards-user'
+    key_response = ec2_client.create_key_pair(KeyName = keyName)
+    with open('private.pem', 'w') as key:
+        key.write(str(key_response['KeyMaterial']))
+    chmd = os.system('chmod 400 private.pem')
+except Exception as e:
+    print(e)
+
+userData = '#!bin/bash\n'
+
+#Generate volume userData & volume parameter
 blockDevices = []
 for volume in config['server']['volumes']:
     volumeConfig = {
@@ -29,56 +47,30 @@ for volume in config['server']['volumes']:
             #'VolumeType': volume['type']
         }
     }
-
     blockDevices.append(volumeConfig)
 
-#print(blockDevices)
+    userData += f"sudo mkdir {volume['mount']}\n"
+    userData += f"sudo mkfs -t {volume['type']} {volume['device']}\n"
+    userData += f"sudo mount {volume['device']} {volume['mount']}\n"
 
-#AWS resources initialization
-ec2_client = boto3.client('ec2')
-ec2_resource = boto3.resource('ec2')
-
-#Create key-pair for ec2-user
-try:
-    print('Creating key-pair...')
-    keyName ='fetch-rewards-user'
-    key_response = ec2_client.create_key_pair(KeyName = keyName)
-    with open('private.pem', 'w') as key:
-        key.write(str(key_response['KeyMaterial']))
-    chmd = os.system('chmod 400 private.pem')
-except Exception as e:
-    print(e)
-
-#Create key-pair for user1
-try:
-    print('Creating key-pair...')
-    keyName1 ='fetch-rewards-user1'
-    key_response = ec2_client.create_key_pair(KeyName = keyName1)
-    with open('user1.pem', 'w') as key:
-        key.write(str(key_response['KeyMaterial']))
-    chmd = os.system('chmod 400 user1.pem')
-except Exception as e:
-    print(e)
-
-#Create key-pair for user2
-try:
-    print('Creating key-pair...')
-    keyName2 ='fetch-rewards-user2'
-    key_response = ec2_client.create_key_pair(KeyName = keyName2)
-    with open('user2.pem', 'w') as key:
-        key.write(str(key_response['KeyMaterial']))
-    chmd = os.system('chmod 400 user2.pem')
-except Exception as e:
-    print(e)
-
-userData = '#!bin/bash\n'
 #Generate UserData
 for index, user in enumerate(config['server']['users'], start=1):
+    #Generate key-pair for users
+    try:
+        print(f"generating key-pair for {user['login']}...")
+        key_response = ec2_client.create_key_pair(KeyName = user['login'])
+        with open(f"{user['login']}.pem", 'w') as key:
+            key.write(str(key_response['KeyMaterial']))
+        chmd = os.system(f"chmod 400 {user['login']}.pem")
+    except Exception as e:
+        print(e)
+    
     userData += f"sudo adduser {user['login']}\n"
     userData += f"sudo mkdir -p /home/{user['login']}/.ssh\n"
     userData += f"sudo chown -R {user['login']}:{user['login']} /home/{user['login']}\n"
     pub_key = os.popen(f'ssh-keygen -y -f user{index}.pem').readlines()
     userData += f"echo '{pub_key[0]}' >> /home/{user['login']}/.ssh/authorized_keys\n"
+
 
 # create VPC and other resources
 try:
