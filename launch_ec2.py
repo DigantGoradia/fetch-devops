@@ -1,5 +1,6 @@
 import yaml
 import boto3
+import os
 
 CONFIG_FILE_PATH = './config.yaml'
 
@@ -31,21 +32,53 @@ for volume in config['server']['volumes']:
 
     blockDevices.append(volumeConfig)
 
-print(blockDevices)
+#print(blockDevices)
 
 #AWS resources initialization
 ec2_client = boto3.client('ec2')
 ec2_resource = boto3.resource('ec2')
 
-#Create key-pair
+#Create key-pair for ec2-user
 try:
     print('Creating key-pair...')
     keyName ='fetch-rewards-user'
     key_response = ec2_client.create_key_pair(KeyName = keyName)
     with open('private.pem', 'w') as key:
         key.write(str(key_response['KeyMaterial']))
+    chmd = os.system('chmod 400 private.pem')
 except Exception as e:
     print(e)
+
+#Create key-pair for user1
+try:
+    print('Creating key-pair...')
+    keyName1 ='fetch-rewards-user1'
+    key_response = ec2_client.create_key_pair(KeyName = keyName1)
+    with open('user1.pem', 'w') as key:
+        key.write(str(key_response['KeyMaterial']))
+    chmd = os.system('chmod 400 user1.pem')
+except Exception as e:
+    print(e)
+
+#Create key-pair for user2
+try:
+    print('Creating key-pair...')
+    keyName2 ='fetch-rewards-user2'
+    key_response = ec2_client.create_key_pair(KeyName = keyName2)
+    with open('user2.pem', 'w') as key:
+        key.write(str(key_response['KeyMaterial']))
+    chmd = os.system('chmod 400 user2.pem')
+except Exception as e:
+    print(e)
+
+userData = '#!bin/bash\n'
+#Generate UserData
+for index, user in enumerate(config['server']['users'], start=1):
+    userData += f"sudo adduser {user['login']}\n"
+    userData += f"sudo mkdir -p /home/{user['login']}/.ssh\n"
+    userData += f"sudo chown -R {user['login']}:{user['login']} /home/{user['login']}\n"
+    pub_key = os.popen(f'ssh-keygen -y -f user{index}.pem').readlines()
+    userData += f"echo '{pub_key[0]}' >> /home/{user['login']}/.ssh/authorized_keys\n"
 
 # create VPC and other resources
 try:
@@ -90,7 +123,7 @@ except Exception as e:
 #Create ec2 instance
 try:
     print('Creating EC2 instance...')
-    ec2_client.run_instances(
+    instance = ec2_client.run_instances(
         BlockDeviceMappings = blockDevices,
         ImageId = imageId,
         InstanceType = instanceType,
@@ -104,11 +137,11 @@ try:
                 'Groups': [sec_group.group_id]
             }
         ],
-        KeyName = keyName
+        KeyName = keyName,
+        UserData = userData
     )
 
-    ec2_client.instances[0].wait_until_running()
-    print('EC2 instance created: ', ec2_client.instances[0].id)
+    #instance['Instances'][0]['InstanceId'].wait_until_running()
+    print('EC2 instance created: ', instance['Instances'][0]['InstanceId'])
 except Exception as e:
     print(e)
-
