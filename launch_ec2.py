@@ -135,5 +135,6 @@ try:
 
     #instance['Instances'][0]['InstanceId'].wait_until_running()
     print('EC2 instance created: ', instance['Instances'][0]['InstanceId'])
+    print('Public IPv4: ', instance['Instances'][0]['PublicIpAddress'])
 except Exception as e:
     print(e)
