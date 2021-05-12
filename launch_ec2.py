@@ -35,7 +35,9 @@ try:
 except Exception as e:
     print(e)
 
-userData = '#!bin/bash\n'
+userData = '''
+#!bin/bash
+'''
 
 #Generate volume userData & volume parameter
 blockDevices = []
@@ -52,6 +54,9 @@ for volume in config['server']['volumes']:
     userData += f"sudo mkdir {volume['mount']}\n"
     userData += f"sudo mkfs -t {volume['type']} {volume['device']}\n"
     userData += f"sudo mount {volume['device']} {volume['mount']}\n"
+
+userData += 'sudo chmod o+rw /\n'
+userData += 'sudo chmod o+rw /data/\n'
 
 #Generate UserData
 for index, user in enumerate(config['server']['users'], start=1):
@@ -70,7 +75,6 @@ for index, user in enumerate(config['server']['users'], start=1):
     userData += f"sudo chown -R {user['login']}:{user['login']} /home/{user['login']}\n"
     pub_key = os.popen(f'ssh-keygen -y -f user{index}.pem').readlines()
     userData += f"echo '{pub_key[0]}' >> /home/{user['login']}/.ssh/authorized_keys\n"
-
 
 # create VPC and other resources
 try:
@@ -132,9 +136,15 @@ try:
         KeyName = keyName,
         UserData = userData
     )
-
-    #instance['Instances'][0]['InstanceId'].wait_until_running()
     print('EC2 instance created: ', instance['Instances'][0]['InstanceId'])
-    print('Public IPv4: ', instance['Instances'][0]['PublicIpAddress'])
+    instance_resource = ec2_resource.Instance(instance['Instances'][0]['InstanceId'])
+    instance_resource.wait_until_running()
+
+    reservations = ec2_client.describe_instances(InstanceIds = [instance['Instances'][0]['InstanceId']]).get('Reservations')
+
+    for reservation in reservations:
+        for instance in reservation['Instances']:
+            print('IPv4: ', instance.get('PublicIpAddress'))
+    
 except Exception as e:
     print(e)
